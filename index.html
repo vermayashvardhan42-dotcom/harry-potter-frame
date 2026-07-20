@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Harry Potter Frame</title>
+  <style>
+    body, html { margin: 0; padding: 0; background: #000; overflow: hidden; height: 100vh; width: 100vw; }
+    video { width: 100%; height: 100%; object-fit: cover; }
+    #tapOverlay {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      z-index: 10; cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="tapOverlay"></div>
+
+  <video id="portraitVideo" autoplay loop muted playsinline webkit-playsinline>
+    <source src="harry_sleeping.mp4" type="video/mp4">
+  </video>
+
+  <script>
+    const video = document.getElementById('portraitVideo');
+    const overlay = document.getElementById('tapOverlay');
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition;
+
+    if (SpeechRecognition) {
+      recognition = new SpeechRecognition();
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+    }
+
+    overlay.addEventListener('click', () => {
+      startInteraction();
+    });
+
+    function startInteraction() {
+      // 1. Play waking video
+      video.src = 'harry_waking.mp4';
+      video.loop = false;
+      video.play();
+
+      // 2. When waking video finishes, start listening
+      video.onended = () => {
+        video.src = 'harry_talking.mp4';
+        video.loop = true;
+        video.play();
+        
+        if (recognition) {
+          recognition.start();
+        }
+      };
+    }
+
+    if (recognition) {
+      recognition.onresult = async (event) => {
+        const userCommand = event.results[0][0].transcript;
+        
+        // Get reply from Gemini AI
+        const reply = await getHarryResponse(userCommand);
+
+        // Speak response out loud
+        const speech = new SpeechSynthesisUtterance(reply);
+        speech.rate = 1.0;
+        speech.pitch = 1.1;
+
+        speech.onend = () => {
+          // Go back to sleeping video
+          video.src = 'harry_sleeping.mp4';
+          video.loop = true;
+          video.play();
+        };
+
+        window.speechSynthesis.speak(speech);
+      };
+
+      recognition.onerror = () => {
+        video.src = 'harry_sleeping.mp4';
+        video.loop = true;
+        video.play();
+      };
+    }
+
+    async function getHarryResponse(promptText) {
+      // PASTE YOUR GEMINI API KEY BETWEEN THE QUOTES BELOW
+      const apiKey = AQ.Ab8RN6KAkFRLxxH6xmr0t1gR6wbKDlP63UVoeHITCZjYwR_yow; 
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+
+      const requestData = {
+        contents: [{
+          parts: [{
+            text: `You are Harry Potter inside a living portrait hanging on a wall. Keep your response brief (1-2 sentences max), magical, and friendly. User says: "${promptText}"`
+          }]
+        }]
+      };
+
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestData)
+        });
+        const data = await response.json();
+        return data.candidates[0].content.parts[0].text;
+      } catch (error) {
+        return "Blimey! My portrait magic seems a bit faulty right now.";
+      }
+    }
+  </script>
+</body>
+</html>
