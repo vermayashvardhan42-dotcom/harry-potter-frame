@@ -58,40 +58,34 @@
       if (target === vTalking) {
         vSleeping.classList.remove('active');
         vTalking.classList.add('active');
-        vTalking.play().catch(e => console.log(e));
+        vTalking.play().catch(() => {});
       } else {
         vTalking.classList.remove('active');
         vSleeping.classList.add('active');
-        vSleeping.play().catch(e => console.log(e));
+        vSleeping.play().catch(() => {});
       }
     }
 
     overlay.addEventListener('click', async () => {
-      // Step 1: Unlock video elements for iOS context
+      // 1. Force video elements to play/unlock inside direct touch event
       if (!isUnlocked) {
-        try {
-          await vSleeping.play();
-          await vTalking.play();
-          vTalking.pause();
-          isUnlocked = true;
-        } catch (err) {
-          console.log("Video unlock note:", err);
-        }
+        vSleeping.play().catch(() => {});
+        vTalking.play().then(() => vTalking.pause()).catch(() => {});
+        isUnlocked = true;
       }
 
-      // Warm up text-to-speech engine
+      // Warm up text-to-speech audio
       window.speechSynthesis.speak(new SpeechSynthesisUtterance(''));
 
-      // Switch to talking loop immediately
       switchVideo(vTalking);
       statusText.innerText = "🎙️ Listening... Speak your question now!";
 
-      // Start speech recognition safely
+      // 2. Start microphone
       if (recognition) {
         try {
           recognition.start();
         } catch(e) {
-          console.log("Recognition already active");
+          console.log("Recognition active");
         }
       } else {
         statusText.innerText = "Speech recognition not supported on this browser.";
@@ -125,8 +119,8 @@
     }
 
     async function getHarryResponse(promptText) {
-      // PASTE YOUR AQ... API KEY HERE
-      const apiKey = "AQ.Ab8RN6KTm--Wle238xp6tOvMm-MsMaSar7SA2D3lrH2iUxGWSA"; 
+      // PASTE YOUR AQ... API KEY ON LINE 110 BELOW (ONCE ONLY)
+      const apiKey = "AQ.Ab8RN6LCJ9PdiAMK3u0niSoGMRJyzcsksx2AjEKosgyl90mNvA"; 
       
       if (apiKey === "YOUR_GEMINI_API_KEY_HERE") {
         return "Hello! I am Harry Potter. Paste your Gemini API key inside index.html!";
@@ -151,14 +145,11 @@
 
         const data = await response.json();
 
-        // Safe response parsing for Gemini 2.5 Flash payload
         if (data && data.candidates && data.candidates[0].content && data.candidates[0].content.parts) {
-          // Grab the last part in case 'thinking' steps are included in initial parts
           const parts = data.candidates[0].content.parts;
-          const textPart = parts[parts.length - 1].text;
-          return textPart.trim();
+          return parts[parts.length - 1].text.trim();
         } else {
-          return "Blimey! My portrait magic is acting up.";
+          return "Blimey! I couldn't process that response.";
         }
       } catch (error) {
         return "Blimey! My portrait magic seems to be acting up right now.";
