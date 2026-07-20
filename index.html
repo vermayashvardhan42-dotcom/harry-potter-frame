@@ -9,14 +9,18 @@
       margin: 0; padding: 0; background: #000; overflow: hidden; height: 100vh; width: 100vw; 
       display: flex; justify-content: center; align-items: center; color: white; font-family: sans-serif;
     }
-    video { width: 100%; height: 100%; object-fit: cover; position: absolute; top:0; left:0; z-index: 1; }
+    video { 
+      width: 100%; height: 100%; object-fit: cover; position: absolute; top:0; left:0; z-index: 1; 
+      opacity: 0; transition: opacity 0.3s ease;
+    }
+    video.active { opacity: 1; z-index: 2; }
     #tapOverlay {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      z-index: 10; cursor: pointer; display: flex; justify-content: center; align-items: center;
+      z-index: 10; cursor: pointer;
     }
     #statusText {
-      z-index: 20; background: rgba(0,0,0,0.7); padding: 15px 25px; border-radius: 10px; text-align: center;
-      border: 1px solid #ffd700; pointer-events: none;
+      z-index: 20; background: rgba(0,0,0,0.75); padding: 12px 20px; border-radius: 8px; text-align: center;
+      border: 1px solid #ffd700; pointer-events: none; position: absolute; bottom: 30px; font-size: 14px;
     }
   </style>
 </head>
@@ -25,12 +29,20 @@
   <div id="statusText">✨ Tap Anywhere to Wake Harry ✨</div>
   <div id="tapOverlay"></div>
 
-  <video id="portraitVideo" autoplay loop muted playsinline webkit-playsinline>
+  <video id="vSleeping" class="active" autoplay loop muted playsinline webkit-playsinline>
     <source src="harry_sleeping.mp4" type="video/mp4">
+  </video>
+  <video id="vWaking" muted playsinline webkit-playsinline preload="auto">
+    <source src="harry_waking.mp4" type="video/mp4">
+  </video>
+  <video id="vTalking" loop muted playsinline webkit-playsinline preload="auto">
+    <source src="harry_talking.mp4" type="video/mp4">
   </video>
 
   <script>
-    const video = document.getElementById('portraitVideo');
+    const vSleeping = document.getElementById('vSleeping');
+    const vWaking = document.getElementById('vWaking');
+    const vTalking = document.getElementById('vTalking');
     const overlay = document.getElementById('tapOverlay');
     const statusText = document.getElementById('statusText');
 
@@ -43,25 +55,39 @@
       recognition.interimResults = false;
     }
 
+    function showVideo(targetVideo) {
+      [vSleeping, vWaking, vTalking].forEach(v => {
+        if (v === targetVideo) {
+          v.classList.add('active');
+          v.play().catch(() => {});
+        } else {
+          v.classList.remove('active');
+          v.pause();
+        }
+      });
+    }
+
     overlay.addEventListener('click', () => {
       statusText.innerText = "⚡ Harry is waking up...";
       startInteraction();
     });
 
     function startInteraction() {
-      video.src = 'harry_waking.mp4';
-      video.loop = false;
-      video.play().catch(() => {});
+      // 1. Play waking video
+      vWaking.currentTime = 0;
+      showVideo(vWaking);
 
-      video.onended = () => {
-        video.src = 'harry_talking.mp4';
-        video.loop = true;
-        video.play().catch(() => {});
-        
+      // 2. When waking video finishes, switch to talking & start listening
+      vWaking.onended = () => {
+        showVideo(vTalking);
         statusText.innerText = "🎙️ Listening... Speak your question!";
 
         if (recognition) {
-          recognition.start();
+          try {
+            recognition.start();
+          } catch(e) {
+            console.log("Recognition already active");
+          }
         } else {
           statusText.innerText = "Speech Recognition not supported on this browser.";
         }
@@ -82,9 +108,7 @@
 
         speech.onend = () => {
           statusText.innerText = "✨ Tap Anywhere to Wake Harry ✨";
-          video.src = 'harry_sleeping.mp4';
-          video.loop = true;
-          video.play().catch(() => {});
+          showVideo(vSleeping);
         };
 
         window.speechSynthesis.speak(speech);
@@ -92,9 +116,7 @@
 
       recognition.onerror = () => {
         statusText.innerText = "Didn't catch that. Tap again!";
-        video.src = 'harry_sleeping.mp4';
-        video.loop = true;
-        video.play().catch(() => {});
+        showVideo(vSleeping);
       };
     }
 
@@ -125,3 +147,4 @@
   </script>
 </body>
 </html>
+
