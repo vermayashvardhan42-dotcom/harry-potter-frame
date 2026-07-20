@@ -10,8 +10,8 @@
       display: flex; justify-content: center; align-items: center; color: white; font-family: sans-serif;
     }
     video { 
-      width: 100%; height: 100%; object-fit: cover; position: absolute; top:0; left:0; z-index: 1; 
-      opacity: 0; transition: opacity 0.3s ease;
+      width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0; z-index: 1; 
+      opacity: 0; transition: opacity 0.2s ease;
     }
     video.active { opacity: 1; z-index: 2; }
     #tapOverlay {
@@ -19,7 +19,7 @@
       z-index: 10; cursor: pointer;
     }
     #statusText {
-      z-index: 20; background: rgba(0,0,0,0.75); padding: 12px 20px; border-radius: 8px; text-align: center;
+      z-index: 20; background: rgba(0, 0, 0, 0.75); padding: 12px 20px; border-radius: 8px; text-align: center;
       border: 1px solid #ffd700; pointer-events: none; position: absolute; bottom: 30px; font-size: 14px;
     }
   </style>
@@ -59,7 +59,7 @@
       [vSleeping, vWaking, vTalking].forEach(v => {
         if (v === targetVideo) {
           v.classList.add('active');
-          v.play().catch(() => {});
+          v.play().catch(e => console.log(e));
         } else {
           v.classList.remove('active');
           v.pause();
@@ -67,18 +67,19 @@
       });
     }
 
+    // Single click handles permissions for iOS
     overlay.addEventListener('click', () => {
-      statusText.innerText = "⚡ Harry is waking up...";
-      startInteraction();
-    });
+      // Warm up voice engine on tap
+      window.speechSynthesis.speak(new SpeechSynthesisUtterance(''));
 
-    function startInteraction() {
-      // 1. Play waking video
+      statusText.innerText = "⚡ Harry is waking up...";
+      
+      // 1. Play waking video immediately
       vWaking.currentTime = 0;
       showVideo(vWaking);
 
-      // 2. When waking video finishes, switch to talking & start listening
-      vWaking.onended = () => {
+      // 2. Use explicit 2.5 second delay (avoids Safari frozen-video bug)
+      setTimeout(() => {
         showVideo(vTalking);
         statusText.innerText = "🎙️ Listening... Speak your question!";
 
@@ -86,13 +87,13 @@
           try {
             recognition.start();
           } catch(e) {
-            console.log("Recognition already active");
+            console.log("Recognition active");
           }
         } else {
-          statusText.innerText = "Speech Recognition not supported on this browser.";
+          statusText.innerText = "Speech recognition not supported.";
         }
-      };
-    }
+      }, 2500); // 2.5 seconds match your waking video duration
+    });
 
     if (recognition) {
       recognition.onresult = async (event) => {
@@ -121,11 +122,10 @@
     }
 
     async function getHarryResponse(promptText) {
-      // PASTE YOUR GEMINI API KEY BELOW IF YOU HAVE ONE
       const apiKey = "YOUR_GEMINI_API_KEY_HERE"; 
       
       if (apiKey === "YOUR_GEMINI_API_KEY_HERE") {
-        return "Hello! I am Harry Potter. Add your Gemini API key in index.html to ask me anything!";
+        return "Hello! I am Harry Potter. Paste your Gemini API key in index.html to talk with me!";
       }
 
       const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
@@ -135,16 +135,15 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            contents: [{ parts: [{ text: `You are Harry Potter inside a living portrait. Answer in 1 short sentence: "${promptText}"` }] }]
+            contents: [{ parts: [{ text: `You are Harry Potter inside a living portrait. Keep answer brief (1-2 sentences): "${promptText}"` }] }]
           })
         });
         const data = await response.json();
         return data.candidates[0].content.parts[0].text;
       } catch (error) {
-        return "Blimey! My magic seems to be acting up right now.";
+        return "Blimey! My portrait magic seems to be acting up right now.";
       }
     }
   </script>
 </body>
 </html>
-
