@@ -1,189 +1,148 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Harry Potter Living Portrait</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body, html { width: 100%; height: 100%; overflow: hidden; background-color: #000; font-family: 'Georgia', serif; }
+<script>
+  // 1. MUST REPLACE WITH YOUR ACTUAL KEY FROM GOOGLE AI STUDIO
+  const GEMINI_API_KEY = "YOUR_ACTUAL_GEMINI_API_KEY_HERE";
+  
+  // Clean URL for Gemini API
+  const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
-    .portrait-container {
-      position: relative;
-      width: 100vw;
-      height: 100vh;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
+  // DOM Elements
+  const sleepingVid = document.getElementById("vid-sleeping");
+  const wakingVid = document.getElementById("vid-waking");
+  const talkingVid = document.getElementById("vid-talking");
+  const talkBtn = document.getElementById("talk-btn");
 
-    video {
-      position: absolute;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      object-fit: cover;
-      opacity: 0;
-      transition: opacity 0.4s ease-in-out;
-      pointer-events: none;
-    }
+  let isListening = false;
+  let recognition = null;
 
-    video.active { opacity: 1; }
+  function setState(state) {
+    sleepingVid.classList.remove("active");
+    wakingVid.classList.remove("active");
+    talkingVid.classList.remove("active");
 
-    #talk-btn {
-      position: absolute;
-      bottom: 40px;
-      z-index: 10;
-      padding: 14px 28px;
-      font-size: 16px;
-      font-weight: bold;
-      color: #ffd700;
-      background: rgba(0, 0, 0, 0.85);
-      border: 2px solid #ffd700;
-      border-radius: 30px;
-      cursor: pointer;
-      box-shadow: 0 0 15px rgba(255, 215, 0, 0.4);
-      backdrop-filter: blur(5px);
-    }
-  </style>
-</head>
-<body>
-
-  <div class="portrait-container">
-    <video id="vid-sleeping" src="harry_sleeping.mp4" loop muted playsinline class="active"></video>
-    <video id="vid-waking" src="harry_waking.mp4" muted playsinline></video>
-    <video id="vid-talking" src="harry_talking.mp4" loop muted playsinline></video>
-
-    <button id="talk-btn">✨ Tap to speak to Harry ✨</button>
-  </div>
-
-  <script>
-    // 1. YOUR GEMINI API KEY HERE
-    const GEMINI_API_KEY = "AQ.Ab8RN6LqfGHIzFjBsgeAM4FEnA_Vwe6o-fwO7GwNDzLwZ2br1Q";
-    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-
-    // DOM Elements
-    const sleepingVid = document.getElementById("vid-sleeping");
-    const wakingVid = document.getElementById("vid-waking");
-    const talkingVid = document.getElementById("vid-talking");
-    const talkBtn = document.getElementById("talk-btn");
-
-    let isListening = false;
-    let recognition = null;
-
-    // Switch video displays smoothly
-    function setState(state) {
-      sleepingVid.classList.remove("active");
-      wakingVid.classList.remove("active");
-      talkingVid.classList.remove("active");
-
-      if (state === "sleeping") {
-        sleepingVid.classList.add("active");
-        sleepingVid.play().catch(() => {});
-      } else if (state === "waking") {
-        wakingVid.classList.add("active");
-        wakingVid.currentTime = 0;
-        wakingVid.play().catch(() => {});
-      } else if (state === "talking") {
-        talkingVid.classList.add("active");
-        talkingVid.play().catch(() => {});
-      }
-    }
-
-    // Initialize speech recognition on user interaction
-    function startInteraction() {
-      if (isListening) return;
-
-      // Unlock video preloading on touch/click
+    if (state === "sleeping") {
+      sleepingVid.classList.add("active");
       sleepingVid.play().catch(() => {});
-      wakingVid.load();
-      talkingVid.load();
+    } else if (state === "waking") {
+      wakingVid.classList.add("active");
+      wakingVid.currentTime = 0;
+      wakingVid.play().catch(() => {});
+    } else if (state === "talking") {
+      talkingVid.classList.add("active");
+      talkingVid.play().catch(() => {});
+    }
+  }
 
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SpeechRecognition) {
-        alert("Speech Recognition is not supported on this browser.");
+  function startInteraction() {
+    if (isListening) return;
+
+    // Check key before attempting speech
+    if (GEMINI_API_KEY === "AQ.Ab8RN6LqfGHIzFjBsgeAM4FEnA_Vwe6o-fwO7GwNDzLwZ2br1Q" || !GEMINI_API_KEY) {
+      talkBtn.innerText = "❌ Error: API Key Missing in Code!";
+      return;
+    }
+
+    sleepingVid.play().catch(() => {});
+    wakingVid.load();
+    talkingVid.load();
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      talkBtn.innerText = "❌ Browser doesn't support Web Speech";
+      return;
+    }
+
+    recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.interimResults = false;
+
+    recognition.onstart = () => {
+      isListening = true;
+      setState("waking");
+      talkBtn.innerText = "🎙️ Listening... Speak now!";
+    };
+
+    recognition.onresult = async (event) => {
+      const userText = event.results[0][0].transcript;
+      talkBtn.innerText = `Thinking: "${userText}"...`;
+      await fetchGeminiResponse(userText);
+    };
+
+    recognition.onerror = (err) => {
+      console.error("Mic Error:", err);
+      talkBtn.innerText = `❌ Mic Error: ${err.error}. Tap to retry.`;
+      setState("sleeping");
+      isListening = false;
+    };
+
+    recognition.onend = () => {
+      isListening = false;
+    };
+
+    try {
+      recognition.start();
+    } catch (e) {
+      console.error("Recognition Start Error:", e);
+    }
+  }
+
+  async function fetchGeminiResponse(query) {
+    try {
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{ text: `You are Harry Potter inside a living portrait. Respond in character in 1-2 short sentences.\n\nUser query: ${query}` }]
+          }]
+        })
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        const msg = errData?.error?.message || `HTTP ${response.status}`;
+        talkBtn.innerText = `❌ API Error: ${msg}`;
+        setState("sleeping");
         return;
       }
 
-      recognition = new SpeechRecognition();
-      recognition.lang = "en-US";
-      recognition.interimResults = false;
+      const data = await response.json();
+      const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
-      recognition.onstart = () => {
-        isListening = true;
-        setState("waking");
-        talkBtn.innerText = "🎙️ Listening... Speak now!";
-      };
-
-      recognition.onresult = async (event) => {
-        const userText = event.results[0][0].transcript;
-        talkBtn.innerText = `Thinking: "${userText}"...`;
-        await fetchGeminiResponse(userText);
-      };
-
-      recognition.onerror = () => {
-        talkBtn.innerText = "Didn't catch that. Tap to try again.";
+      if (reply) {
+        speakAndAnimate(reply);
+      } else {
+        talkBtn.innerText = "❌ Empty reply from Gemini.";
         setState("sleeping");
-        isListening = false;
-      };
-
-      recognition.onend = () => {
-        isListening = false;
-      };
-
-      recognition.start();
-    }
-
-    // Call Gemini API with user's actual speech
-    async function fetchGeminiResponse(query) {
-      try {
-        const response = await fetch(API_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{
-              parts: [{ text: `You are Harry Potter inside a living portrait. Respond in character in 1 or 2 short sentences.\n\nUser: ${query}` }]
-            }]
-          })
-        });
-
-        const data = await response.json();
-        const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-        if (reply) {
-          speakAndAnimate(reply);
-        } else {
-          speakAndAnimate("Blimey, I didn't hear you clearly.");
-        }
-      } catch (err) {
-        console.error(err);
-        speakAndAnimate("Something went wrong with the magic connection.");
       }
+    } catch (err) {
+      console.error("Fetch Error:", err);
+      talkBtn.innerText = `❌ Connection Failed: ${err.message}`;
+      setState("sleeping");
     }
+  }
 
-    // Play Voice Output and change video state
-    function speakAndAnimate(text) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
+  function speakAndAnimate(text) {
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
 
-      utterance.onstart = () => {
-        setState("talking");
-        talkBtn.innerText = `🗣️ "${text}"`;
-      };
+    utterance.onstart = () => {
+      setState("talking");
+      talkBtn.innerText = `🗣️ "${text}"`;
+    };
 
-      utterance.onend = () => {
-        setState("sleeping");
-        talkBtn.innerText = "✨ Tap to speak to Harry ✨";
-      };
+    utterance.onend = () => {
+      setState("sleeping");
+      talkBtn.innerText = "✨ Tap to speak to Harry ✨";
+    };
 
-      utterance.onerror = () => {
-        setState("sleeping");
-        talkBtn.innerText = "✨ Tap to speak to Harry ✨";
-      };
+    utterance.onerror = (e) => {
+      console.error("Speech Error:", e);
+      setState("sleeping");
+      talkBtn.innerText = "✨ Tap to speak to Harry ✨";
+    };
 
-      window.speechSynthesis.speak(utterance);
-    }
+    window.speechSynthesis.speak(utterance);
+  }
 
-    talkBtn.addEventListener("click", startInteraction);
-  </script>
-</body>
-</html>
+  talkBtn.addEventListener("click", startInteraction);
+</script>
