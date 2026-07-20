@@ -1,160 +1,245 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Harry Potter Frame</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Harry Potter Living Portrait</title>
   <style>
-    body, html { 
-      margin: 0; padding: 0; background: #000; overflow: hidden; height: 100vh; width: 100vw; 
-      display: flex; justify-content: center; align-items: center; color: white; font-family: sans-serif;
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
     }
-    video { 
-      width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0; 
-      opacity: 0; transition: opacity 0.2s ease; z-index: 1;
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #000;
+      font-family: 'Georgia', serif;
     }
-    video.active { opacity: 1; z-index: 2; }
-    #tapOverlay {
-      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      z-index: 10; cursor: pointer;
+
+    /* Fullscreen Video Overlay Stack */
+    .portrait-container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
     }
-    #statusText {
-      z-index: 20; background: rgba(0, 0, 0, 0.85); padding: 12px 20px; border-radius: 8px; text-align: center;
-      border: 1px solid #ffd700; pointer-events: none; position: absolute; bottom: 30px; font-size: 14px;
+
+    video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      opacity: 0;
+      transition: opacity 0.4s ease-in-out;
+      pointer-events: none;
+    }
+
+    video.active {
+      opacity: 1;
+    }
+
+    /* Tap Button Control */
+    #interaction-btn {
+      position: absolute;
+      bottom: 40px;
+      z-index: 10;
+      padding: 12px 24px;
+      font-size: 16px;
+      font-weight: bold;
+      color: #ffd700;
+      background: rgba(0, 0, 0, 0.75);
+      border: 2px solid #ffd700;
+      border-radius: 25px;
+      cursor: pointer;
+      box-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
+      backdrop-filter: blur(5px);
+      transition: transform 0.2s ease, background 0.2s ease;
+    }
+
+    #interaction-btn:active {
+      transform: scale(0.95);
     }
   </style>
 </head>
 <body>
 
-  <div id="statusText">✨ Tap Anywhere to Talk to Harry ✨</div>
-  <div id="tapOverlay"></div>
+  <div class="portrait-container">
+    <!-- Inline muted play ensures WebKit mobile autoplay compliance -->
+    <video id="vid-sleeping" src="sleeping.mp4" loop muted playsinline class="active"></video>
+    <video id="vid-waking" src="waking.mp4" muted playsinline></video>
+    <video id="vid-talking" src="talking.mp4" loop muted playsinline></video>
 
-  <video id="vSleeping" class="active" autoplay loop muted playsinline webkit-playsinline preload="auto">
-    <source src="harry_sleeping.mp4" type="video/mp4">
-  </video>
-
-  <video id="vTalking" loop muted playsinline webkit-playsinline preload="auto">
-    <source src="harry_talking.mp4" type="video/mp4">
-  </video>
+    <button id="interaction-btn">✨ Tap Anywhere to Talk to Harry ✨</button>
+  </div>
 
   <script>
-    const vSleeping = document.getElementById('vSleeping');
-    const vTalking = document.getElementById('vTalking');
-    const overlay = document.getElementById('tapOverlay');
-    const statusText = document.getElementById('statusText');
+    // Config: Place your backend / Gemini / Custom API Endpoint here
+    const API_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"; 
+    const API_KEY = "AQ.Ab8RN6LCJ9PdiAMK3u0niSoGMRJyzcsksx2AjEKosgyl90mNvA";
+
+    // DOM Elements
+    const sleepingVid = document.getElementById("vid-sleeping");
+    const wakingVid = document.getElementById("vid-waking");
+    const talkingVid = document.getElementById("vid-talking");
+    const actionBtn = document.getElementById("interaction-btn");
 
     let isUnlocked = false;
+    let recognition = null;
 
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    let recognition;
-
-    if (SpeechRecognition) {
-      recognition = new SpeechRecognition();
-      recognition.lang = 'en-US';
-      recognition.interimResults = false;
-    }
-
-    function switchVideo(target) {
-      if (target === vTalking) {
-        vSleeping.classList.remove('active');
-        vTalking.classList.add('active');
-        vTalking.play().catch(() => {});
-      } else {
-        vTalking.classList.remove('active');
-        vSleeping.classList.add('active');
-        vSleeping.play().catch(() => {});
-      }
-    }
-
-    overlay.addEventListener('click', async () => {
-      // 1. Force video elements to play/unlock inside direct touch event
-      if (!isUnlocked) {
-        vSleeping.play().catch(() => {});
-        vTalking.play().then(() => vTalking.pause()).catch(() => {});
-        isUnlocked = true;
-      }
-
-      // Warm up text-to-speech audio
-      window.speechSynthesis.speak(new SpeechSynthesisUtterance(''));
-
-      switchVideo(vTalking);
-      statusText.innerText = "🎙️ Listening... Speak your question now!";
-
-      // 2. Start microphone
-      if (recognition) {
-        try {
-          recognition.start();
-        } catch(e) {
-          console.log("Recognition active");
-        }
-      } else {
-        statusText.innerText = "Speech recognition not supported on this browser.";
-      }
-    });
-
-    if (recognition) {
-      recognition.onresult = async (event) => {
-        const userCommand = event.results[0][0].transcript;
-        statusText.innerText = `You: "${userCommand}"\nHarry is thinking...`;
-        
-        const reply = await getHarryResponse(userCommand);
-        statusText.innerText = `Harry: "${reply}"`;
-
-        const speech = new SpeechSynthesisUtterance(reply);
-        speech.rate = 1.0;
-        speech.pitch = 1.1;
-
-        speech.onend = () => {
-          statusText.innerText = "✨ Tap Anywhere to Talk to Harry ✨";
-          switchVideo(vSleeping);
-        };
-
-        window.speechSynthesis.speak(speech);
-      };
-
-      recognition.onerror = () => {
-        statusText.innerText = "Didn't catch that. Tap to try again!";
-        switchVideo(vSleeping);
-      };
-    }
-
-    async function getHarryResponse(promptText) {
-      // PASTE YOUR AQ... API KEY ON LINE 110 BELOW (ONCE ONLY)
-      const apiKey = "AQ.Ab8RN6LCJ9PdiAMK3u0niSoGMRJyzcsksx2AjEKosgyl90mNvA"; 
-      
-      if (apiKey === "YOUR_GEMINI_API_KEY_HERE") {
-        return "Hello! I am Harry Potter. Paste your Gemini API key inside index.html!";
-      }
-
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    // 1. Initialize & Unlock Video Streams on First Physical Tap
+    async function unlockAudioAndVideos() {
+      if (isUnlocked) return;
 
       try {
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [
-              {
-                parts: [
-                  { text: `You are Harry Potter inside a living portrait. Speak directly as Harry and respond in 1 short sentence: "${promptText}"` }
-                ]
-              }
-            ]
-          })
-        });
+        // Play and pause all videos simultaneously during user gesture to bypass iOS blocks
+        await Promise.all([
+          sleepingVid.play(),
+          wakingVid.play().then(() => wakingVid.pause()),
+          talkingVid.play().then(() => talkingVid.pause())
+        ]);
 
-        const data = await response.json();
-
-        if (data && data.candidates && data.candidates[0].content && data.candidates[0].content.parts) {
-          const parts = data.candidates[0].content.parts;
-          return parts[parts.length - 1].text.trim();
-        } else {
-          return "Blimey! I couldn't process that response.";
-        }
-      } catch (error) {
-        return "Blimey! My portrait magic seems to be acting up right now.";
+        isUnlocked = true;
+        actionBtn.innerText = "🎙️ Listening... Speak your question now!";
+        startListening();
+      } catch (err) {
+        console.error("Playback unlock failed:", err);
+        actionBtn.innerText = "Tap again to grant permissions";
       }
     }
+
+    // 2. Video State Switching Helper
+    function setPortraitState(state) {
+      sleepingVid.classList.remove("active");
+      wakingVid.classList.remove("active");
+      talkingVid.classList.remove("active");
+
+      if (state === "sleeping") {
+        sleepingVid.classList.add("active");
+        sleepingVid.play();
+      } else if (state === "waking") {
+        wakingVid.classList.add("active");
+        wakingVid.currentTime = 0;
+        wakingVid.play();
+      } else if (state === "talking") {
+        talkingVid.classList.add("active");
+        talkingVid.play();
+      }
+    }
+
+    // 3. Web Speech API Setup
+    function startListening() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+      if (!SpeechRecognition) {
+        alert("Speech Recognition is not supported on this browser. Try Chrome or Safari.");
+        return;
+      }
+
+      recognition = new SpeechRecognition();
+      recognition.lang = "en-US";
+      recognition.interimResults = false;
+
+      recognition.onstart = () => {
+        setPortraitState("waking");
+        actionBtn.innerText = "🎙️ Listening...";
+      };
+
+      recognition.onresult = async (event) => {
+        const userQuery = event.results[0][0].transcript;
+        actionBtn.innerText = `Thinking: "${userQuery}"...`;
+        
+        // Fetch AI Response
+        await processAIResponse(userQuery);
+      };
+
+      recognition.onerror = (event) => {
+        console.error("Speech Recognition Error:", event.error);
+        handleFallback("Blimey! I couldn't hear that properly.");
+      };
+
+      recognition.start();
+    }
+
+    // 4. API Response Processor with Error Trapping
+    async function processAIResponse(query) {
+      try {
+        // Adjust request structure based on your specific backend API endpoint
+        const response = await fetch(API_ENDPOINT, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${API_KEY}`
+          },
+          body: JSON.stringify({ prompt: query })
+        });
+
+        if (!response.ok) {
+          throw new Error(`Server returned status ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        // Ensure reply string exists
+        const replyText = data.reply || data.choices?.[0]?.text || data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+        if (!replyText) {
+          throw new Error("Empty response payload received from server.");
+        }
+
+        speakAndAnimate(replyText);
+
+      } catch (error) {
+        console.error("API Fetch Error:", error);
+        handleFallback("Blimey! I can't process that response.");
+      }
+    }
+
+    // 5. Speech Synthesis & Video Sync
+    function speakAndAnimate(text) {
+      window.speechSynthesis.cancel(); // Clear queued speech
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+
+      utterance.onstart = () => {
+        setPortraitState("talking");
+        actionBtn.innerText = "🗣️ Harry is speaking...";
+      };
+
+      utterance.onend = () => {
+        setPortraitState("sleeping");
+        actionBtn.innerText = "✨ Tap to talk again ✨";
+      };
+
+      utterance.onerror = (err) => {
+        console.error("Speech Synthesis Error:", err);
+        setPortraitState("sleeping");
+        actionBtn.innerText = "✨ Tap to try again ✨";
+      };
+
+      window.speechSynthesis.speak(utterance);
+    }
+
+    // Fallback Handler
+    function handleFallback(errorMessage) {
+      speakAndAnimate(errorMessage);
+    }
+
+    // Event Listener
+    actionBtn.addEventListener("click", () => {
+      if (!isUnlocked) {
+        unlockAudioAndVideos();
+      } else {
+        startListening();
+      }
+    });
   </script>
 </body>
 </html>
