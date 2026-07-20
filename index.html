@@ -52,7 +52,7 @@
       // Google OAuth Token Client इनिशियलाइज़ करने का फ़ंक्शन
       function initializeGoogleSignIn() {
         const client = google.accounts.oauth2.initTokenClient({
-          client_id: 'YOUR_CLIENT_ID_HERE.apps.googleusercontent.com', // यहाँ अपनी कॉपी की हुई Client ID डालें
+          client_id: '915301130815-alrmn3kdpn0qe9tl8n76md3359qq0te0.apps.googleusercontent.com', // यहाँ अपनी कॉपी की हुई Client ID डालें
           scope: 'email profile',
           callback: (tokenResponse) => {
             if (tokenResponse && tokenResponse.access_token) {
