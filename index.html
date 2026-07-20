@@ -5,16 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Harry Potter Frame</title>
   <style>
-    body, html { margin: 0; padding: 0; background: #000; overflow: hidden; height: 100vh; width: 100vw; }
-    video { width: 100%; height: 100%; object-fit: cover; }
+    body, html { 
+      margin: 0; padding: 0; background: #000; overflow: hidden; height: 100vh; width: 100vw; 
+      display: flex; justify-content: center; align-items: center; color: white; font-family: sans-serif;
+    }
+    video { width: 100%; height: 100%; object-fit: cover; position: absolute; top:0; left:0; z-index: 1; }
     #tapOverlay {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      z-index: 10; cursor: pointer;
+      z-index: 10; cursor: pointer; display: flex; justify-content: center; align-items: center;
+    }
+    #statusText {
+      z-index: 20; background: rgba(0,0,0,0.7); padding: 15px 25px; border-radius: 10px; text-align: center;
+      border: 1px solid #ffd700; pointer-events: none;
     }
   </style>
 </head>
 <body>
 
+  <div id="statusText">✨ Tap Anywhere to Wake Harry ✨</div>
   <div id="tapOverlay"></div>
 
   <video id="portraitVideo" autoplay loop muted playsinline webkit-playsinline>
@@ -24,6 +32,7 @@
   <script>
     const video = document.getElementById('portraitVideo');
     const overlay = document.getElementById('tapOverlay');
+    const statusText = document.getElementById('statusText');
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     let recognition;
@@ -35,23 +44,26 @@
     }
 
     overlay.addEventListener('click', () => {
+      statusText.innerText = "⚡ Harry is waking up...";
       startInteraction();
     });
 
     function startInteraction() {
-      // 1. Play waking video
       video.src = 'harry_waking.mp4';
       video.loop = false;
-      video.play();
+      video.play().catch(() => {});
 
-      // 2. When waking video finishes, start listening
       video.onended = () => {
         video.src = 'harry_talking.mp4';
         video.loop = true;
-        video.play();
+        video.play().catch(() => {});
         
+        statusText.innerText = "🎙️ Listening... Speak your question!";
+
         if (recognition) {
           recognition.start();
+        } else {
+          statusText.innerText = "Speech Recognition not supported on this browser.";
         }
       };
     }
@@ -59,55 +71,55 @@
     if (recognition) {
       recognition.onresult = async (event) => {
         const userCommand = event.results[0][0].transcript;
+        statusText.innerText = `You asked: "${userCommand}"\nThinking...`;
         
-        // Get reply from Gemini AI
         const reply = await getHarryResponse(userCommand);
+        statusText.innerText = `Harry: "${reply}"`;
 
-        // Speak response out loud
         const speech = new SpeechSynthesisUtterance(reply);
         speech.rate = 1.0;
         speech.pitch = 1.1;
 
         speech.onend = () => {
-          // Go back to sleeping video
+          statusText.innerText = "✨ Tap Anywhere to Wake Harry ✨";
           video.src = 'harry_sleeping.mp4';
           video.loop = true;
-          video.play();
+          video.play().catch(() => {});
         };
 
         window.speechSynthesis.speak(speech);
       };
 
       recognition.onerror = () => {
+        statusText.innerText = "Didn't catch that. Tap again!";
         video.src = 'harry_sleeping.mp4';
         video.loop = true;
-        video.play();
+        video.play().catch(() => {});
       };
     }
 
     async function getHarryResponse(promptText) {
-      // PASTE YOUR GEMINI API KEY BETWEEN THE QUOTES BELOW
-      const apiKey = AQ.Ab8RN6KAkFRLxxH6xmr0t1gR6wbKDlP63UVoeHITCZjYwR_yow; 
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+      // PASTE YOUR GEMINI API KEY BELOW IF YOU HAVE ONE
+      const apiKey = "YOUR_GEMINI_API_KEY_HERE"; 
+      
+      if (apiKey === "YOUR_GEMINI_API_KEY_HERE") {
+        return "Hello! I am Harry Potter. Add your Gemini API key in index.html to ask me anything!";
+      }
 
-      const requestData = {
-        contents: [{
-          parts: [{
-            text: `You are Harry Potter inside a living portrait hanging on a wall. Keep your response brief (1-2 sentences max), magical, and friendly. User says: "${promptText}"`
-          }]
-        }]
-      };
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
       try {
         const response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestData)
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: `You are Harry Potter inside a living portrait. Answer in 1 short sentence: "${promptText}"` }] }]
+          })
         });
         const data = await response.json();
         return data.candidates[0].content.parts[0].text;
       } catch (error) {
-        return "Blimey! My portrait magic seems a bit faulty right now.";
+        return "Blimey! My magic seems to be acting up right now.";
       }
     }
   </script>
