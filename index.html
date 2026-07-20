@@ -18,6 +18,7 @@
         display: flex;
         justify-content: center;
         align-items: center;
+        font-family: Georgia, serif;
       }
       .portrait-container {
         position: relative;
@@ -36,6 +37,24 @@
         height: 100%;
         object-fit: cover;
       }
+      /* Activation Overlay to grant browser audio/mic permissions */
+      #start-overlay {
+        position: absolute;
+        z-index: 100;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.85);
+        display: none;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        color: #f0c975;
+        text-align: center;
+        cursor: pointer;
+      }
+      #start-overlay h1 { font-size: 2rem; margin-bottom: 10px; }
+      #start-overlay p { font-size: 1rem; color: #ccc; }
+
       .voice-indicator {
         position: absolute;
         bottom: 20px;
@@ -47,7 +66,6 @@
         box-shadow: 0 0 10px #00ff66;
         z-index: 10;
         opacity: 0.8;
-        transition: all 0.3s ease;
       }
       .voice-indicator.thinking {
         background-color: #ffcc00;
@@ -61,6 +79,12 @@
   </head>
   <body>
 
+    <!-- Touch overlay required by Chrome for wall mounts -->
+    <div id="start-overlay" onclick="activateFrame()">
+      <h1>⚡ Harry Potter Portrait ⚡</h1>
+      <p>Tap anywhere on screen to wake up the portrait voice engine</p>
+    </div>
+
     <div class="portrait-container" id="portrait">
       <video id="sleepingVideo" src="harry_sleeping.mp4" autoplay loop muted playsinline></video>
       <video id="talkingVideo" src="harry_talking.mp4" style="display:none;" loop muted playsinline></video>
@@ -72,9 +96,8 @@
     <script>
       let currentState = 'sleeping';
       let recognition = null;
-      let isProcessingOrSpeaking = false;
+      let isBusy = false;
 
-      // Switch video states
       function playState(newState) {
         if (currentState === newState) return;
         const states = ['sleeping', 'talking', 'walking'];
@@ -93,9 +116,24 @@
         currentState = newState;
       }
 
-      // Query AI Engine
+      // 1. Activate frame on user tap (Bypasses Chrome restrictions)
+      function activateFrame() {
+        document.getElementById('start-overlay').style.display = 'none';
+        document.getElementById('portrait').style.display = 'flex';
+        
+        // Resume browser audio context
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.resume();
+          window.speechSynthesis.cancel();
+        }
+
+        playState('sleeping');
+        startContinuousVoiceControl();
+      }
+
+      // 2. Send transcript to AI
       async function askAI(userQuery) {
-        isProcessingOrSpeaking = true;
+        isBusy = true;
         const indicator = document.getElementById('indicator');
         indicator.className = 'voice-indicator thinking';
 
@@ -108,7 +146,7 @@
               messages: [
                 { 
                   role: 'system', 
-                  content: 'You are Harry Potter inside a magical living portrait. Keep responses short, witty, and in-character (maximum 2 short sentences).' 
+                  content: 'You are Harry Potter inside a magical living portrait. Keep responses short, witty, and under 2 short sentences.' 
                 },
                 { role: 'user', content: userQuery }
               ]
@@ -121,68 +159,48 @@
 
         } catch (error) {
           console.error('AI Error:', error);
-          speakResponse("Mischief managed... my magic seems a bit spotty right now.");
+          speakResponse("Mischief managed... my magic seems spotty right now.");
         }
       }
 
-      // Text-To-Speech Output + Sync Video
+      // 3. Speech Output
       function speakResponse(text) {
-        if (!('speechSynthesis' in window)) {
-          restartListening();
-          return;
-        }
-
         const indicator = document.getElementById('indicator');
         indicator.className = 'voice-indicator speaking';
 
-        // Clear any stuck synthesis queues in browser
-        window.speechSynthesis.cancel();
+        if (!('speechSynthesis' in window)) {
+          finishSpeech();
+          return;
+        }
 
+        window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.rate = 0.95;
-        utterance.pitch = 1.0;
 
-        // Try selecting an English voice
-        const voices = window.speechSynthesis.getVoices();
-        const englishVoice = voices.find(v => v.lang.startsWith('en')) || voices[0];
-        if (englishVoice) utterance.voice = englishVoice;
-
-        utterance.onstart = () => {
-          playState('talking');
-        };
-
-        const onFinishSpeech = () => {
-          playState('sleeping');
-          indicator.className = 'voice-indicator';
-          isProcessingOrSpeaking = false;
-          restartListening();
-        };
-
-        utterance.onend = onFinishSpeech;
-        utterance.onerror = (err) => {
-          console.error('Speech synthesis error:', err);
-          onFinishSpeech();
-        };
+        utterance.onstart = () => playState('talking');
+        utterance.onend = finishSpeech;
+        utterance.onerror = finishSpeech;
 
         window.speechSynthesis.speak(utterance);
       }
 
-      // Restart mic loop cleanly
-      function restartListening() {
-        if (!recognition) return;
-        try {
-          recognition.start();
-        } catch (e) {
-          // Listener is already running
-        }
+      function finishSpeech() {
+        playState('sleeping');
+        document.getElementById('indicator').className = 'voice-indicator';
+        isBusy = false;
+        restartListening();
       }
 
-      // Continuous Voice Recognition Engine
+      function restartListening() {
+        if (!recognition || isBusy) return;
+        try {
+          recognition.start();
+        } catch (e) {}
+      }
+
+      // 4. Infinite Microphone Loop
       function startContinuousVoiceControl() {
-        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-          console.error('Speech recognition not supported in this browser.');
-          return;
-        }
+        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) return;
 
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         recognition = new SpeechRecognition();
@@ -192,55 +210,47 @@
         recognition.lang = 'en-US';
 
         recognition.onresult = (event) => {
-          if (isProcessingOrSpeaking) return;
+          if (isBusy) return;
 
-          const lastResultIndex = event.results.length - 1;
-          const transcript = event.results[lastResultIndex][0].transcript.toLowerCase().trim();
-          console.log('User said:', transcript);
+          const lastIndex = event.results.length - 1;
+          const transcript = event.results[lastIndex][0].transcript.toLowerCase().trim();
+          console.log(' Heard:', transcript);
 
           if (!transcript) return;
 
-          // Direct physical movement commands
-          if (transcript.includes('walk away') || transcript.includes('leave room')) {
+          if (transcript.includes('walk away') || transcript.includes('leave')) {
             playState('walking');
           } else if (transcript.includes('go to sleep')) {
             playState('sleeping');
           } else {
-            // Send questions/conversations to AI
-            recognition.stop(); // Pause mic while AI thinks and speaks
             askAI(transcript);
           }
         };
 
         recognition.onend = () => {
-          // If mic drops naturally and we aren't speaking/thinking, restart immediately
-          if (!isProcessingOrSpeaking) {
-            setTimeout(() => restartListening(), 300);
+          if (!isBusy) {
+            setTimeout(restartListening, 200);
           }
         };
 
-        recognition.onerror = (event) => {
-          console.warn('Speech recognition error:', event.error);
-          if (event.error !== 'aborted' && !isProcessingOrSpeaking) {
-            setTimeout(() => restartListening(), 1000);
+        recognition.onerror = (e) => {
+          if (e.error !== 'aborted' && !isBusy) {
+            setTimeout(restartListening, 1000);
           }
         };
 
         restartListening();
       }
 
-      // Google OAuth Initialization
+      // 5. Auth Callback
       function initializeGoogleSignIn() {
         const client = google.accounts.oauth2.initTokenClient({
           client_id: '915301130815-alrmn3kdpn0qe9tl8n76md3359qq0te0.apps.googleusercontent.com',
           scope: 'email profile',
           callback: (tokenResponse) => {
             if (tokenResponse && tokenResponse.access_token) {
-              const container = document.getElementById('portrait');
-              container.style.display = 'flex';
-              
-              playState('sleeping');
-              startContinuousVoiceControl();
+              // Show touch-to-start overlay after auth completes
+              document.getElementById('start-overlay').style.display = 'flex';
             }
           },
         });
@@ -249,12 +259,6 @@
       }
 
       window.onload = () => {
-        // Pre-load synthesis voices
-        if ('speechSynthesis' in window) {
-          window.speechSynthesis.onvoiceschanged = () => {
-            window.speechSynthesis.getVoices();
-          };
-        }
         initializeGoogleSignIn();
       };
     </script>
