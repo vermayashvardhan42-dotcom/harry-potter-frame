@@ -5,18 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Harry Potter Living Portrait</title>
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-    body, html {
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background-color: #000;
-      font-family: 'Georgia', serif;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body, html { width: 100%; height: 100%; overflow: hidden; background-color: #000; font-family: 'Georgia', serif; }
 
     .portrait-container {
       position: relative;
@@ -29,36 +19,30 @@
 
     video {
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
       object-fit: cover;
       opacity: 0;
       transition: opacity 0.4s ease-in-out;
       pointer-events: none;
     }
 
-    video.active {
-      opacity: 1;
-    }
+    video.active { opacity: 1; }
 
-    #status-overlay {
+    #talk-btn {
       position: absolute;
       bottom: 40px;
       z-index: 10;
-      padding: 12px 24px;
+      padding: 14px 28px;
       font-size: 16px;
       font-weight: bold;
       color: #ffd700;
-      background: rgba(0, 0, 0, 0.75);
+      background: rgba(0, 0, 0, 0.85);
       border: 2px solid #ffd700;
-      border-radius: 25px;
-      box-shadow: 0 0 15px rgba(255, 215, 0, 0.3);
-      backdrop-filter: blur(5px);
-      text-align: center;
-      pointer-events: auto;
+      border-radius: 30px;
       cursor: pointer;
+      box-shadow: 0 0 15px rgba(255, 215, 0, 0.4);
+      backdrop-filter: blur(5px);
     }
   </style>
 </head>
@@ -69,38 +53,25 @@
     <video id="vid-waking" src="harry_waking.mp4" muted playsinline></video>
     <video id="vid-talking" src="harry_talking.mp4" loop muted playsinline></video>
 
-    <div id="status-overlay">✨ Tap once to awaken Harry ✨</div>
+    <button id="talk-btn">✨ Tap to speak to Harry ✨</button>
   </div>
 
   <script>
+    // 1. YOUR GEMINI API KEY HERE
+    const GEMINI_API_KEY = "AQ.Ab8RN6LqfGHIzFjBsgeAM4FEnA_Vwe6o-fwO7GwNDzLwZ2br1Q";
+    const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+
     // DOM Elements
     const sleepingVid = document.getElementById("vid-sleeping");
     const wakingVid = document.getElementById("vid-waking");
     const talkingVid = document.getElementById("vid-talking");
-    const statusText = document.getElementById("status-overlay");
+    const talkBtn = document.getElementById("talk-btn");
 
-    let isStarted = false;
+    let isListening = false;
     let recognition = null;
 
-    // Local in-character responses (No API required)
-    const HARRY_RESPONSES = [
-      "I am Harry Potter. Welcome to Hogwarts!",
-      "Mind the moving staircases, they like to change!",
-      "Have you seen Hedwig around? She should be returning from the owlery.",
-      "Mischief managed! Always keep your wand at the ready.",
-      "Beware of the Whomping Willow if you're wandering near the grounds.",
-      "Dumbledore always said that words are our most inexhaustible source of magic.",
-      "If you're looking for Gryffindor common room, the password is 'Caput Draconis'."
-    ];
-
-    // Helper: Pick a random reply
-    function getHarryReply() {
-      const index = Math.floor(Math.random() * HARRY_RESPONSES.length);
-      return HARRY_RESPONSES[index];
-    }
-
-    // Switch video state cleanly
-    function setPortraitState(state) {
+    // Switch video displays smoothly
+    function setState(state) {
       sleepingVid.classList.remove("active");
       wakingVid.classList.remove("active");
       talkingVid.classList.remove("active");
@@ -118,93 +89,101 @@
       }
     }
 
-    // Initial tap to unlock browser audio/video restrictions
-    document.body.addEventListener("click", () => {
-      if (!isStarted) {
-        isStarted = true;
-        
-        // Start sleeping loop
-        sleepingVid.play().catch(() => {});
-        wakingVid.load();
-        talkingVid.load();
+    // Initialize speech recognition on user interaction
+    function startInteraction() {
+      if (isListening) return;
 
-        statusText.innerText = "🎙️ Listening... Speak to Harry!";
-        initSpeechRecognition();
-      }
-    });
+      // Unlock video preloading on touch/click
+      sleepingVid.play().catch(() => {});
+      wakingVid.load();
+      talkingVid.load();
 
-    // Web Speech API - Recognition Setup
-    function initSpeechRecognition() {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-
       if (!SpeechRecognition) {
-        statusText.innerText = "Speech API not supported in this browser.";
+        alert("Speech Recognition is not supported on this browser.");
         return;
       }
 
       recognition = new SpeechRecognition();
       recognition.lang = "en-US";
-      recognition.continuous = true;
       recognition.interimResults = false;
 
       recognition.onstart = () => {
-        setPortraitState("waking");
-        statusText.innerText = "🎙️ Listening...";
+        isListening = true;
+        setState("waking");
+        talkBtn.innerText = "🎙️ Listening... Speak now!";
       };
 
-      recognition.onresult = (event) => {
-        const transcript = event.results[event.results.length - 1][0].transcript;
-        statusText.innerText = `You asked: "${transcript}"`;
-        
-        // Process reply
-        respondAsHarry();
+      recognition.onresult = async (event) => {
+        const userText = event.results[0][0].transcript;
+        talkBtn.innerText = `Thinking: "${userText}"...`;
+        await fetchGeminiResponse(userText);
       };
 
       recognition.onerror = () => {
-        // Automatically restart listening on error
-        setTimeout(() => {
-          try { recognition.start(); } catch(e) {}
-        }, 1000);
+        talkBtn.innerText = "Didn't catch that. Tap to try again.";
+        setState("sleeping");
+        isListening = false;
       };
 
       recognition.onend = () => {
-        // Auto-restart loop to keep it hands-free
-        if (isStarted) {
-          try { recognition.start(); } catch(e) {}
-        }
+        isListening = false;
       };
 
-      try {
-        recognition.start();
-      } catch(e) {}
+      recognition.start();
     }
 
-    // Speak response & animate portrait
-    function respondAsHarry() {
-      window.speechSynthesis.cancel();
+    // Call Gemini API with user's actual speech
+    async function fetchGeminiResponse(query) {
+      try {
+        const response = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{
+              parts: [{ text: `You are Harry Potter inside a living portrait. Respond in character in 1 or 2 short sentences.\n\nUser: ${query}` }]
+            }]
+          })
+        });
 
-      const reply = getHarryReply();
-      const utterance = new SpeechSynthesisUtterance(reply);
-      utterance.rate = 0.95;
-      utterance.pitch = 1.0;
+        const data = await response.json();
+        const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+        if (reply) {
+          speakAndAnimate(reply);
+        } else {
+          speakAndAnimate("Blimey, I didn't hear you clearly.");
+        }
+      } catch (err) {
+        console.error(err);
+        speakAndAnimate("Something went wrong with the magic connection.");
+      }
+    }
+
+    // Play Voice Output and change video state
+    function speakAndAnimate(text) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
 
       utterance.onstart = () => {
-        setPortraitState("talking");
-        statusText.innerText = `🗣️ "${reply}"`;
+        setState("talking");
+        talkBtn.innerText = `🗣️ "${text}"`;
       };
 
       utterance.onend = () => {
-        setPortraitState("sleeping");
-        statusText.innerText = "🎙️ Listening...";
+        setState("sleeping");
+        talkBtn.innerText = "✨ Tap to speak to Harry ✨";
       };
 
       utterance.onerror = () => {
-        setPortraitState("sleeping");
-        statusText.innerText = "🎙️ Listening...";
+        setState("sleeping");
+        talkBtn.innerText = "✨ Tap to speak to Harry ✨";
       };
 
       window.speechSynthesis.speak(utterance);
     }
+
+    talkBtn.addEventListener("click", startInteraction);
   </script>
 </body>
 </html>
