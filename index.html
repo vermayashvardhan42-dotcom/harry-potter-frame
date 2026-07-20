@@ -18,8 +18,7 @@
         width: 100%;
         height: 100%;
         overflow: hidden;
-        background-color: #0d0d0d;
-        font-family: 'Georgia', serif;
+        background-color: #000;
         display: flex;
         justify-content: center;
         align-items: center;
@@ -41,31 +40,119 @@
         height: 100%;
         object-fit: cover;
       }
+      /* Minimal status indicator in bottom corner to show voice active */
+      .voice-indicator {
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+        width: 12px;
+        height: 12px;
+        background-color: #00ff66;
+        border-radius: 50%;
+        box-shadow: 0 0 10px #00ff66;
+        z-index: 10;
+        opacity: 0.6;
+      }
     </style>
   </head>
   <body>
+
     <div class="portrait-container" id="portrait">
-      <!-- Your media files -->
-      <video id="sleepingVideo" src="harry_sleeping.mp4" autoplay loop muted playsinline></video>
-      <video id="talkingVideo" src="harry_talking.mp4" style="display:none;" loop muted playsinline></video>
-      <video id="walkingVideo" src="harry_walking.mp4" style="display:none;" loop muted playsinline></video>
+      <!-- Video Elements -->
+      <video id="sleepingVideo" src="Harry_sleeping.mp4" autoplay loop muted playsinline></video>
+      <video id="talkingVideo" src="Harry_talking.mp4" style="display:none;" loop muted playsinline></video>
+      <video id="walkingVideo" src="Harry_walking.mp4" style="display:none;" loop muted playsinline></video>
+
+      <!-- Discreet status glow showing voice engine is listening -->
+      <div class="voice-indicator" title="Listening for voice commands..."></div>
     </div>
 
     <script>
+      let currentState = 'sleeping';
+      let recognition = null;
+
+      // State Management for Videos
+      function playState(newState) {
+        if (currentState === newState) return;
+
+        const states = ['sleeping', 'talking', 'walking'];
+        
+        states.forEach((state) => {
+          const video = document.getElementById(`${state}Video`);
+          if (state === newState) {
+            video.style.display = 'block';
+            video.currentTime = 0;
+            video.play().catch(err => console.log('Playback error:', err));
+          } else {
+            video.style.display = 'none';
+            video.pause();
+          }
+        });
+
+        currentState = newState;
+      }
+
+      // Continuous Voice Control Engine
+      function startContinuousVoiceControl() {
+        if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+          console.error('Speech recognition not supported in this browser.');
+          return;
+        }
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        recognition = new SpeechRecognition();
+        
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
+
+        recognition.onresult = (event) => {
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+              const transcript = event.results[i][0].transcript.toLowerCase().trim();
+              console.log('Voice Command Received:', transcript);
+
+              // Voice triggers
+              if (transcript.includes('hello') || transcript.includes('talk') || transcript.includes('speak') || transcript.includes('harry')) {
+                playState('talking');
+              } else if (transcript.includes('walk') || transcript.includes('go') || transcript.includes('move') || transcript.includes('away')) {
+                playState('walking');
+              } else if (transcript.includes('sleep') || transcript.includes('rest') || transcript.includes('quiet') || transcript.includes('stop')) {
+                playState('sleeping');
+              }
+            }
+          }
+        };
+
+        // Automatically restart speech recognition if it drops or times out
+        recognition.onend = () => {
+          console.log('Voice listener restarted for wall mount operation...');
+          recognition.start();
+        };
+
+        recognition.onerror = (event) => {
+          console.warn('Speech recognition error:', event.error);
+          // Restart on error (except when aborted intentionally)
+          if (event.error !== 'aborted') {
+            setTimeout(() => recognition.start(), 1000);
+          }
+        };
+
+        recognition.start();
+      }
+
+      // Google OAuth Initialization
       function initializeGoogleSignIn() {
         const client = google.accounts.oauth2.initTokenClient({
-          client_id: '915301130815-alrmn3kdpn0qe9tl8n76md3359qq0te0.apps.googleusercontent.com',
+          client_id: '915301138815-a1rmckdqpn9r136tm2355qaq4tek.apps.googleusercontent.com',
           scope: 'email profile',
           callback: (tokenResponse) => {
             if (tokenResponse && tokenResponse.access_token) {
-              console.log('Authentication successful!');
-              
-              // Unhide the video container and start video playback
               const container = document.getElementById('portrait');
               container.style.display = 'flex';
               
-              const sleepingVideo = document.getElementById('sleepingVideo');
-              sleepingVideo.play().catch(err => console.log('Autoplay blocked:', err));
+              playState('sleeping');
+              startContinuousVoiceControl();
             }
           },
         });
