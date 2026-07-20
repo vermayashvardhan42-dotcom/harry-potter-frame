@@ -81,7 +81,7 @@
     // -------------------------------------------------------------
     // REPLACE WITH YOUR GEMINI API KEY FROM GOOGLE AI STUDIO
     // -------------------------------------------------------------
-    const GEMINI_API_KEY = "AQ.Ab8RN6LqfGHIzFjBsgeAM4FEnA_Vwe6o-fwO7GwNDzLwZ2br1Q";
+    const GEMINI_API_KEY = "AQ.Ab8RN6Lwb9AoKfn67ymkls6-9P7BeCP4xEIgxvstodCL-TVkZA";
     
     const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
@@ -114,7 +114,7 @@
     function startInteraction() {
       if (isListening) return;
 
-      if (GEMINI_API_KEY === "AQ.Ab8RN6LqfGHIzFjBsgeAM4FEnA_Vwe6o-fwO7GwNDzLwZ2br1Q" || !GEMINI_API_KEY) {
+      if (GEMINI_API_KEY === "PASTE_YOUR_GEMINI_API_KEY_HERE" || !GEMINI_API_KEY) {
         talkBtn.innerText = "❌ Please paste your API Key in line 70!";
         return;
       }
