@@ -67,6 +67,7 @@
     }
 
     overlay.addEventListener('click', async () => {
+      // Step 1: Unlock video elements for iOS context
       if (!isUnlocked) {
         try {
           await vSleeping.play();
@@ -74,20 +75,23 @@
           vTalking.pause();
           isUnlocked = true;
         } catch (err) {
-          console.log("Video unlock error:", err);
+          console.log("Video unlock note:", err);
         }
       }
 
+      // Warm up text-to-speech engine
       window.speechSynthesis.speak(new SpeechSynthesisUtterance(''));
 
+      // Switch to talking loop immediately
       switchVideo(vTalking);
       statusText.innerText = "🎙️ Listening... Speak your question now!";
 
+      // Start speech recognition safely
       if (recognition) {
         try {
           recognition.start();
         } catch(e) {
-          console.log("Recognition active");
+          console.log("Recognition already active");
         }
       } else {
         statusText.innerText = "Speech recognition not supported on this browser.";
@@ -121,11 +125,11 @@
     }
 
     async function getHarryResponse(promptText) {
-      // PASTE YOUR AQ... API KEY BETWEEN THE QUOTES BELOW
+      // PASTE YOUR AQ... API KEY HERE
       const apiKey = "AQ.Ab8RN6KTm--Wle238xp6tOvMm-MsMaSar7SA2D3lrH2iUxGWSA"; 
       
       if (apiKey === "YOUR_GEMINI_API_KEY_HERE") {
-        return "Hello! I am Harry Potter. Add your Gemini API key in index.html to talk with me!";
+        return "Hello! I am Harry Potter. Paste your Gemini API key inside index.html!";
       }
 
       const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
@@ -137,9 +141,8 @@
           body: JSON.stringify({
             contents: [
               {
-                role: 'user',
                 parts: [
-                  { text: `You are Harry Potter inside a living portrait. Keep your answer brief (1-2 sentences max): "${promptText}"` }
+                  { text: `You are Harry Potter inside a living portrait. Speak directly as Harry and respond in 1 short sentence: "${promptText}"` }
                 ]
               }
             ]
@@ -148,10 +151,14 @@
 
         const data = await response.json();
 
-        if (data.candidates && data.candidates[0].content.parts[0].text) {
-          return data.candidates[0].content.parts[0].text;
+        // Safe response parsing for Gemini 2.5 Flash payload
+        if (data && data.candidates && data.candidates[0].content && data.candidates[0].content.parts) {
+          // Grab the last part in case 'thinking' steps are included in initial parts
+          const parts = data.candidates[0].content.parts;
+          const textPart = parts[parts.length - 1].text;
+          return textPart.trim();
         } else {
-          return "Blimey! I couldn't process that response.";
+          return "Blimey! My portrait magic is acting up.";
         }
       } catch (error) {
         return "Blimey! My portrait magic seems to be acting up right now.";
